@@ -165,3 +165,21 @@ jobs:
           name: reporte-zap
           path: zap-report/
           if-no-files-found: error
+
+  deploy-vercel:
+    name: Deploy (Vercel)
+    needs: dast-zap
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v6
+
+      - name: Instalar la herramienta de Vercel
+        run: npm install --global vercel@latest
+
+      - name: Desplegar la app en Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: vercel deploy --prod --yes
