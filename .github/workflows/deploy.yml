@@ -120,3 +120,48 @@ jobs:
         with:
           name: reporte-snyk
           path: snyk.sarif
+
+  dast-zap:
+    name: DAST (OWASP ZAP)
+    needs: [sast-codeql, sast-semgrep, sca-snyk]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v6
+
+      - name: Construir la imagen con el Dockerfile
+        run: docker build -t app-prueba .
+
+      - name: Levantar la app en un entorno de prueba temporal
+        run: |
+          docker run -d --name app -p 8080:8080 app-prueba
+          for intento in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/ > /dev/null; then
+              echo "La app esta respondiendo"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs app
+          exit 1
+
+      - name: Preparar la carpeta del reporte
+        run: |
+          mkdir zap-report
+          chmod 777 zap-report
+
+      - name: Analizar la app de prueba con ZAP
+        continue-on-error: true
+        run: |
+          docker run --rm --network host \
+            -v "$GITHUB_WORKSPACE/zap-report:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t http://localhost:8080 \
+            -r reporte-zap.html -J reporte-zap.json -I
+
+      - name: Guardar el reporte como archivo
+        uses: actions/upload-artifact@v6
+        with:
+          name: reporte-zap
+          path: zap-report/
+          if-no-files-found: error
