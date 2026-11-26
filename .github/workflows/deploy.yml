@@ -57,3 +57,34 @@ jobs:
         uses: github/codeql-action/analyze@v4
         with:
           category: codeql
+
+  sast-semgrep:
+    name: SAST (Semgrep)
+    needs: secret-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v6
+
+      - name: Analizar el codigo con Semgrep
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" -w /src \
+            semgrep/semgrep semgrep scan \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/javascript \
+            --metrics=off \
+            --sarif --output=semgrep.sarif
+
+      - name: Subir hallazgos a la pestana Security
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Guardar el reporte como archivo
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: reporte-semgrep
+          path: semgrep.sarif
