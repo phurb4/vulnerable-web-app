@@ -1,19 +1,40 @@
-name: Deploy Vulnerable Application                                  # workflow name
+name: DevSecOps Pipeline
 
 on:
   push:
     branches:
       - master
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
 jobs:
-  deploy-heroku:
-    name: Deploy Heroku
+  secret-scan:
+    name: Secret Scan (Betterleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: akhileshns/heroku-deploy@v3.12.12 # This is the action
+      - name: Descargar el codigo
+        uses: actions/checkout@v6
+
+      - name: Buscar claves expuestas
+        continue-on-error: true
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/repo" -w /repo \
+            ghcr.io/betterleaks/betterleaks:v1.9.0 \
+            dir . --redact --report-format sarif --report-path betterleaks.sarif
+
+      - name: Subir hallazgos a la pestana Security
+        uses: github/codeql-action/upload-sarif@v4
         with:
-          heroku_api_key: ${{secrets.HEROKU_API_KEY}}
-          heroku_app_name: "app-vulnerable2022" #Must be unique in Heroku
-          heroku_email: "roxsrossve@gmail.com"
-          remote_branch: "master"
-          usedocker: true
+          sarif_file: betterleaks.sarif
+          category: betterleaks
+
+      - name: Guardar el reporte como archivo
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: reporte-betterleaks
+          path: betterleaks.sarif
